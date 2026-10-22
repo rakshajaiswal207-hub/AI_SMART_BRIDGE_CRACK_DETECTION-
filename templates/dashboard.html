@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI-Based Smart Bridge Crack Detection System</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 32'%3E%3Cpath d='M2 22h60M8 22V12h6v10M50 22V12h6v10M14 22c8-12 28-12 36 0' fill='none' stroke='%23c4321f' stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+</head>
+<body>
+  <header class="masthead">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 64 32" aria-hidden="true">
+        <path d="M2 24h60M8 24V13h7v11M49 24V13h7v11M15 24c8-13 26-13 34 0" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square"/>
+        <path d="M24 18h4M32 16h3M40 18h4" stroke="currentColor" stroke-width="1.6"/>
+      </svg>
+      <div>
+        <p class="eyebrow">Inspection support · laboratory prototype</p>
+        <h1>AI-Based Smart Bridge Crack Detection System</h1>
+      </div>
+    </div>
+    <div class="clock-block">
+      <p class="eyebrow">Dashboard clock</p>
+      <p id="clock" class="clock">--</p>
+    </div>
+  </header>
+
+  <ol class="pipeline" aria-label="Processing pipeline">
+    <li>1 Capture</li>
+    <li>2 Wi-Fi</li>
+    <li>3 Receive</li>
+    <li>4 Pre-process</li>
+    <li>5 Detect</li>
+    <li>6 Highlight</li>
+    <li>7 Store</li>
+    <li>8 Dashboard</li>
+  </ol>
+
+  <main>
+    <section class="viewer" aria-label="Latest inspection images">
+      <figure>
+        <figcaption>Original image</figcaption>
+        <div class="frame" id="original-frame">
+          <img id="original" alt="Original bridge-surface photograph" {% if latest %}src="{{ url_for('serve_image', image_id=latest.id, type='original') }}"{% else %}hidden{% endif %}>
+          <p class="placeholder" {% if latest %}hidden{% endif %}>Waiting for a capture</p>
+        </div>
+      </figure>
+      <figure>
+        <figcaption>Processed image</figcaption>
+        <div class="frame" id="processed-frame">
+          <img id="processed" alt="Processed mask after edge detection and thresholding" {% if latest %}src="{{ url_for('serve_image', image_id=latest.id, type='processed') }}"{% else %}hidden{% endif %}>
+          <p class="placeholder" {% if latest %}hidden{% endif %}>Waiting for a capture</p>
+        </div>
+      </figure>
+      <figure>
+        <figcaption>Highlighted crack region</figcaption>
+        <div class="frame" id="result-frame">
+          <img id="result" alt="Original image with crack-like regions outlined in red" {% if latest %}src="{{ url_for('serve_image', image_id=latest.id, type='result') }}"{% else %}hidden{% endif %}>
+          <p class="placeholder" {% if latest %}hidden{% endif %}>Waiting for a capture</p>
+        </div>
+      </figure>
+    </section>
+
+    <section
+      id="result-panel"
+      class="result {% if latest and latest.region_count > 0 %}is-alert{% elif latest %}is-clear{% endif %}"
+      aria-live="polite"
+    >
+      <div>
+        <p class="eyebrow">Detection result</p>
+        <p id="status-text">{{ latest.status if latest else "No inspection yet" }}</p>
+      </div>
+      <dl>
+        <div>
+          <dt>Regions</dt>
+          <dd id="region-count">{{ latest.region_count if latest else "—" }}</dd>
+        </div>
+        <div>
+          <dt>Date</dt>
+          <dd id="captured-date">{{ latest.captured_date if latest else "—" }}</dd>
+        </div>
+        <div>
+          <dt>Time</dt>
+          <dd id="captured-time">{{ latest.captured_time if latest else "—" }}</dd>
+        </div>
+        <div>
+          <dt>Processing</dt>
+          <dd id="processing-ms">—</dd>
+        </div>
+      </dl>
+    </section>
+
+    <p id="notice" class="notice" hidden></p>
+
+    <section class="controls">
+      <form id="upload-form">
+        <div id="drop" class="drop">
+          <label for="image">Upload a bridge-surface image</label>
+          <p>JPEG or PNG from the miniature model. The ESP32-CAM can POST the same <code>/upload</code> route.</p>
+          <input id="image" name="image" type="file" accept="image/jpeg,image/png,image/webp,image/bmp">
+        </div>
+        <button type="submit" id="upload-button">Process image</button>
+      </form>
+      <div class="samples">
+        <p class="eyebrow">Demonstration samples</p>
+        <button type="button" class="secondary" data-sample="artificial_crack.jpg">Artificial crack</button>
+        <button type="button" class="secondary" data-sample="crack_free.jpg">Crack-free surface</button>
+        <button type="button" class="secondary" data-sample="dim_crack.jpg">Dim lighting</button>
+        <button type="button" id="follow-latest" class="text-button" hidden>Follow latest capture</button>
+      </div>
+    </section>
+
+    <section class="history-card" aria-labelledby="history-heading">
+      <div class="history-head">
+        <h2 id="history-heading">Inspection history</h2>
+        <p>Stored records. Select a row to review that capture.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Status</th>
+              <th>Regions</th>
+            </tr>
+          </thead>
+          <tbody id="history-body">
+            {% for row in history %}
+            <tr data-id="{{ row.id }}" tabindex="0" {% if latest and row.id == latest.id %}class="selected"{% endif %}>
+              <td>{{ row.id }}</td>
+              <td>{{ row.captured_date }}</td>
+              <td>{{ row.captured_time }}</td>
+              <td>{{ row.status }}</td>
+              <td>{{ row.region_count }}</td>
+            </tr>
+            {% else %}
+            <tr class="empty"><td colspan="5">No inspection records yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>This tool highlights possible visible crack-like regions so an inspector can look more closely. It does not assess structural safety and is not a substitute for professional inspection.</p>
+    <p class="engine">Records: {{ db_engine }}</p>
+  </footer>
+
+  <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+</body>
+</html>
